@@ -1,35 +1,155 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React, { useState } from "react";
+import { ApolloClient, InMemoryCache, gql, HttpLink } from "@apollo/client";
+import { useQuery, useMutation, ApolloProvider } from "@apollo/client/react";
+import "./App.css";
 
-function App() {
-  const [count, setCount] = useState(0)
+const client = new ApolloClient({
+  link: new HttpLink({ uri: "http://localhost:4000/graphql" }),
+  cache: new InMemoryCache(),
+});
+
+const GET_TODOS = gql`
+  query GetTodos {
+    todos {
+      id
+      task
+      completed
+    }
+  }
+`;
+
+const ADD_TODO = gql`
+  mutation AddTodo($task: String!) {
+    addTodo(task: $task) {
+      id
+      task
+      completed
+    }
+  }
+`;
+const DELETE_TODO = gql`
+  mutation DeleteTodo($id: ID!) {
+    deleteTodoById(id: $id) {
+      id
+      task
+      completed
+    }
+  }
+`;
+const MARK_COMPLETED = gql`
+  mutation MarkTaskCompleted($id: ID!) {
+    markTaskCompleted(id: $id) {
+      id
+      task
+      completed
+    }
+  }
+`;
+
+function TodoApp() {
+  const { loading, error, data } = useQuery(GET_TODOS, {
+    fetchPolicy: "network-only",
+  });
+  const [addTodo] = useMutation(ADD_TODO, {
+    refetchQueries: [{ query: GET_TODOS }],
+  });
+  const [markTaskCompleted] = useMutation(MARK_COMPLETED);
+  const [deleteTodoById] = useMutation(DELETE_TODO, {
+    refetchQueries: [{ query: GET_TODOS }],
+  });
+  const [taskName, setTaskName] = useState("");
+
+  const handleAddTodo = (e) => {
+    e.preventDefault();
+    if (!taskName.trim()) return;
+    addTodo({ variables: { task: taskName } });
+    setTaskName("");
+  };
+  const handleDeleteTodo = (id) => {
+    console.log(id);
+    if (!id) return;
+    deleteTodoById({ variables: { id } });
+  };
+  const handleMarkCompleted = (id) => {
+    console.log(id);
+    if (!id) return;
+    markTaskCompleted({ variables: { id } });
+  };
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error.message}</p>;
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
+    <div
+      style={{
+        padding: "20px",
+        maxWidth: "400px",
+        margin: "0 auto",
+        fontFamily: "sans-serif",
+      }}
+    >
+      <h2>Todo List</h2>
+      <form
+        onSubmit={handleAddTodo}
+        style={{ marginBottom: "20px", display: "flex", gap: "10px" }}
+      >
+        <input
+          type="text"
+          value={taskName}
+          onChange={(e) => setTaskName(e.target.value)}
+          placeholder="New task..."
+          style={{ flex: 1, padding: "5px" }}
+        />
+        <button type="submit" style={{ padding: "5px 10px" }}>
+          Add
         </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+      </form>
+
+      <ul style={{ listStyleType: "none", padding: 0 }}>
+        {data.todos.map((todo) => (
+          <li
+            key={todo.id}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "10px",
+              borderBottom: "1px solid #ccc",
+              textDecoration: todo.completed ? "line-through" : "none",
+              color: todo.completed ? "#888" : "#000",
+            }}
+          >
+            <span>{todo.task}</span>
+            {!todo.completed && (
+              <button
+                onClick={() => handleMarkCompleted(todo.id)}
+                style={{ padding: "3px 8px", cursor: "pointer" }}
+              >
+                Complete
+              </button>
+            )}
+            {!todo.completed && (
+              <button
+                onClick={() => handleDeleteTodo(todo.id)}
+                style={{ padding: "3px 8px", cursor: "pointer" }}
+              >
+                Delete Todo
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {data.todos.length === 0 && <p>No todos yet!</p>}
+    </div>
+  );
 }
 
-export default App
+function App() {
+  return (
+    <ApolloProvider client={client}>
+      <TodoApp />
+    </ApolloProvider>
+  );
+}
+
+export default App;
