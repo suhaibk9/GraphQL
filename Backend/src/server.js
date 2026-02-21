@@ -3,40 +3,64 @@ import cors from "cors";
 import { ApolloServer } from "@apollo/server";
 import { expressMiddleware } from "@as-integrations/express5";
 
+let users = [];
 let todos = [];
 
 const typeDefs = `
+  type User {
+    id: ID!
+    name: String!
+  }
+
   type Todo {
     id: ID!
     task: String!
     completed: Boolean!
+    user: User
   }
 
   type Query {
-    todos: [Todo!]!
+    todos(userId: ID): [Todo!]!
     getTodoByIndex(id:ID!):Todo!
+    users: [User!]!
   }
 
   type Mutation {
-    addTodo(task: String!): Todo!
+    addTodo(task: String!, userId: ID!): Todo!
     markTaskCompleted(id: ID!): Todo!
     deleteTodoById(id:ID!):Todo!
+    addUser(name: String!): User!
   }
 `;
 
 const resolvers = {
   Query: {
-    todos: () => todos,
+    todos: (_, { userId }) =>
+      userId ? todos.filter((t) => t.userId === userId) : todos,
     getTodoByIndex: (parent, args, context, info) => {
       return todos[parseInt(args.id)];
     },
+    users: () => users,
+  },
+  Todo: {
+    user: (parent) => users.find((u) => u.id === parent.userId),
   },
   Mutation: {
-    addTodo: (_, { task }) => {
+    addUser: (_, { name }) => {
+      const existing = users.find((u) => u.name === name);
+      if (existing) return existing;
+      const newUser = { id: String(users.length + 1), name };
+      users.push(newUser);
+      return newUser;
+    },
+    addTodo: (_, { task, userId }) => {
+      const user = users.find((u) => u.id === userId);
+      if (!user) throw new Error("User not found");
       const newTodo = {
         id: String(todos.length + 1),
         task,
         completed: false,
+        userId,
       };
       todos.push(newTodo);
       return newTodo;
